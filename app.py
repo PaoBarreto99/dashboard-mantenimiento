@@ -8,7 +8,7 @@ from pathlib import Path
 # CONFIG
 # ---------------------------------------------------
 st.set_page_config(
-    page_title="Dashboard de Mantenimiento",
+    page_title="Dashboard de Mantenimiento 🔧",
     page_icon="🔧",
     layout="wide"
 )
@@ -33,29 +33,13 @@ section[data-testid="stSidebar"] {
 }
 
 .card {
-    background: white;
+    background: grey;
     padding: 24px;
     border-radius: 18px;
     border: 1px solid #edf0f4;
     box-shadow: 0 4px 14px rgba(0,0,0,.05);
 }
 
-.kpi-title {
-    font-size: 14px;
-    color: #6b7280;
-}
-
-.kpi-value {
-    font-size: 38px;
-    font-weight: 800;
-    color: #111827;
-}
-
-.section-title {
-    font-size: 28px;
-    font-weight: 800;
-    margin-top: 15px;
-}
 
 .filter-box {
     background: white;
