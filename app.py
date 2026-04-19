@@ -69,20 +69,56 @@ small {
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# LEER CSV
+# CARGAR CSV INTELIGENTE
 # ---------------------------------------------------
 archivo = Path("datos_mantenimiento.csv")
 
 if not archivo.exists():
-    st.error("Subí datos_mantenimiento.csv al repositorio GitHub")
+    st.error("No se encontró datos_mantenimiento.csv en el repositorio.")
     st.stop()
 
-df = pd.read_csv(archivo, sep=None, engine="python")
-df.columns = df.columns.str.strip()
+try:
+    df = pd.read_csv(
+        archivo,
+        sep=None,
+        engine="python",
+        encoding="utf-8-sig"
+    )
+except Exception as e:
+    st.error(f"Error leyendo CSV: {e}")
+    st.stop()
 
-# ---------------------------------------------------
-# VALIDAR
-# ---------------------------------------------------
+# limpiar encabezados
+df.columns = (
+    df.columns
+    .str.strip()
+    .str.replace("\ufeff", "", regex=False)
+)
+
+# normalizar nombres
+rename_map = {}
+
+for col in df.columns:
+    c = col.lower().strip()
+
+    if c == "fecha":
+        rename_map[col] = "Fecha"
+
+    elif c == "equipo":
+        rename_map[col] = "Equipo"
+
+    elif "operativo" in c:
+        rename_map[col] = "Tiempo Operativo (h)"
+
+    elif c == "fallas":
+        rename_map[col] = "Fallas"
+
+    elif "reparación" in c or "reparacion" in c:
+        rename_map[col] = "Tiempo Reparación (h)"
+
+df = df.rename(columns=rename_map)
+
+# validar
 cols = [
     "Fecha",
     "Equipo",
@@ -91,16 +127,18 @@ cols = [
     "Tiempo Reparación (h)"
 ]
 
-for c in cols:
-    if c not in df.columns:
-        st.error(f"Falta columna: {c}")
-        st.stop()
+faltantes = [c for c in cols if c not in df.columns]
+
+if faltantes:
+    st.error(f"Faltan columnas: {faltantes}")
+    st.write("Columnas detectadas:", list(df.columns))
+    st.stop()
 
 # ---------------------------------------------------
 # FECHAS
 # ---------------------------------------------------
 df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
-df = df.dropna()
+df = df.dropna(subset=["Fecha"])
 
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
@@ -119,7 +157,11 @@ st.sidebar.title("🔧 MaintDash")
 st.sidebar.markdown("### Gestión Inteligente")
 
 años = sorted(df["Año"].unique())
-año_sel = st.sidebar.selectbox("📅 Año", años, index=len(años)-1)
+año_sel = st.sidebar.selectbox(
+    "📅 Año",
+    años,
+    index=len(años)-1
+)
 
 mes_sel = st.sidebar.selectbox(
     "📌 Mes",
@@ -143,7 +185,7 @@ t_rep = df_f["Tiempo Reparación (h)"].sum()
 
 mtbf = t_op / fallas if fallas > 0 else 0
 mttr = t_rep / fallas if fallas > 0 else 0
-disp = (mtbf / (mtbf + mttr))*100 if (mtbf+mttr)>0 else 0
+disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr) > 0 else 0
 
 # ---------------------------------------------------
 # HEADER
@@ -195,7 +237,7 @@ with c4:
 st.write("")
 
 # ---------------------------------------------------
-# GRAFICOS TOP
+# GRAFICOS SUPERIORES
 # ---------------------------------------------------
 g1,g2 = st.columns([1,2])
 
@@ -254,7 +296,7 @@ grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
 grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
 grupo["Disponibilidad"] = (
     grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-)*100
+) * 100
 
 grupo = grupo.sort_values("MesNum")
 
