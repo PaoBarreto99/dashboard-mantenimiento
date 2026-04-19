@@ -1,297 +1,262 @@
 # app.py
-# ==========================================================
-# MaintDash PRO - Dashboard de Mantenimiento
-# Streamlit + Plotly + CSV Local
+# Dashboard de Mantenimiento en Streamlit
 # Ejecutar:
-# pip install streamlit pandas plotly
+# pip install streamlit pandas plotly openpyxl
 # streamlit run app.py
-# ==========================================================
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
-from datetime import date
+from datetime import datetime
 
-# ----------------------------------------------------------
+# ---------------------------------------------------
 # CONFIG
-# ----------------------------------------------------------
+# ---------------------------------------------------
 st.set_page_config(
-    page_title="MaintDash PRO",
+    page_title="Dashboard de Mantenimiento",
     page_icon="🔧",
     layout="wide"
 )
 
-FILE = "registros.csv"
-
-# ----------------------------------------------------------
-# ESTILOS
-# ----------------------------------------------------------
+# ---------------------------------------------------
+# CSS ESTILO BASE44
+# ---------------------------------------------------
 st.markdown("""
 <style>
-.main {
-    background-color: #f5f7fa;
+html, body, [class*="css"] {
+    font-family: Inter, sans-serif;
 }
+
 .block-container {
-    padding-top: 1rem;
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1600px;
 }
-div[data-testid="metric-container"] {
+
+h1 {
+    font-size: 44px !important;
+    font-weight: 800 !important;
+    color: #111827;
+}
+
+.subtitle {
+    font-size: 22px;
+    color: #6b7280;
+    margin-top: -10px;
+    margin-bottom: 25px;
+}
+
+.card {
     background: white;
-    border-radius: 14px;
-    padding: 18px;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+    padding: 28px;
+    border-radius: 18px;
+    border: 1px solid #edf0f4;
+    box-shadow: 0 2px 6px rgba(0,0,0,.03);
 }
-.sidebar .sidebar-content {
-    background: #0f172a;
+
+.kpi-title {
+    font-size: 15px;
+    color: #6b7280;
+    margin-bottom: 8px;
 }
-h1, h2, h3 {
-    color:#0f172a;
+
+.kpi-value {
+    font-size: 42px;
+    font-weight: 800;
+    color: #111827;
+}
+
+.kpi-unit {
+    font-size: 18px;
+    color: #6b7280;
+}
+
+.section-title {
+    font-size: 34px;
+    font-weight: 800;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+.small-note {
+    color: #6b7280;
+    font-size: 14px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------------------------------------------------
-# FUNCIONES
-# ----------------------------------------------------------
-def cargar():
-    if os.path.exists(FILE):
-        return pd.read_csv(FILE)
-    return pd.DataFrame(columns=[
-        "Fecha",
-        "Equipo",
-        "Tiempo Operativo",
-        "Fallas",
-        "Tiempo Reparacion"
-    ])
+# ---------------------------------------------------
+# CARGA EXCEL
+# ---------------------------------------------------
+archivo = "datos_mantenimiento.xlsx"
 
-def guardar(df):
-    df.to_csv(FILE, index=False)
+try:
+    df = pd.read_excel(archivo)
+except:
+    st.error("No se encontró datos_mantenimiento.xlsx")
+    st.stop()
 
-def preparar(df):
-    if df.empty:
-        return df
-    df["Fecha"] = pd.to_datetime(df["Fecha"])
-    df["Año"] = df["Fecha"].dt.year
-    df["Mes"] = df["Fecha"].dt.month
-    df["Dia"] = df["Fecha"].dt.day
-    return df
+# ---------------------------------------------------
+# LIMPIEZA
+# ---------------------------------------------------
+df["Fecha"] = pd.to_datetime(df["Fecha"])
+df["Año"] = df["Fecha"].dt.year
+df["Mes"] = df["Fecha"].dt.month_name()
 
-def kpis(df):
-    if df.empty:
-        return 0,0,0,0,0
+# ---------------------------------------------------
+# SIDEBAR FILTROS
+# ---------------------------------------------------
+st.sidebar.title("Filtros")
 
-    op = df["Tiempo Operativo"].sum()
-    fall = df["Fallas"].sum()
-    rep = df["Tiempo Reparacion"].sum()
+años = sorted(df["Año"].unique())
+año_sel = st.sidebar.selectbox("Año", años, index=len(años)-1)
 
-    mtbf = op / fall if fall > 0 else op
-    mttr = rep / fall if fall > 0 else 0
-    disp = (op / (op + rep))*100 if op > 0 else 0
+meses = ["Todos"] + list(df["Mes"].unique())
+mes_sel = st.sidebar.selectbox("Mes", meses)
 
-    return mtbf, mttr, fall, op, disp
+df_f = df[df["Año"] == año_sel]
 
-# ----------------------------------------------------------
-# CARGA
-# ----------------------------------------------------------
-df = preparar(cargar())
+if mes_sel != "Todos":
+    df_f = df_f[df_f["Mes"] == mes_sel]
 
-# ----------------------------------------------------------
-# SIDEBAR
-# ----------------------------------------------------------
-st.sidebar.markdown("## 🔧 MaintDash")
-st.sidebar.caption("Gestión de Mantenimiento")
+# ---------------------------------------------------
+# KPI CALCULOS
+# ---------------------------------------------------
+tiempo_operativo = df_f["Tiempo Operativo (h)"].sum()
+fallas = df_f["Fallas"].sum()
+tiempo_rep = df_f["Tiempo Reparación (h)"].sum()
 
-menu = st.sidebar.radio(
-    "Menú",
-    ["Dashboard", "Registros"]
-)
+mtbf = tiempo_operativo / fallas if fallas > 0 else 0
+mttr = tiempo_rep / fallas if fallas > 0 else 0
+disp = mtbf / (mtbf + mttr) if (mtbf + mttr) > 0 else 0
 
-# ----------------------------------------------------------
-# REGISTROS
-# ----------------------------------------------------------
-if menu == "Registros":
+# ---------------------------------------------------
+# TITULO
+# ---------------------------------------------------
+st.markdown("<h1>Dashboard de Mantenimiento</h1>", unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Indicadores clave de rendimiento</div>', unsafe_allow_html=True)
 
-    st.title("📋 Registros de Mantenimiento")
-    st.caption("Agregá registros para alimentar el dashboard.")
+# ---------------------------------------------------
+# KPIS
+# ---------------------------------------------------
+c1,c2,c3,c4 = st.columns(4)
 
-    with st.form("nuevo"):
+with c1:
+    st.markdown(f"""
+    <div class='card'>
+    <div class='kpi-title'>MTBF</div>
+    <div class='kpi-value'>{mtbf:.1f} <span class='kpi-unit'>horas</span></div>
+    <div class='small-note'>Tiempo medio entre fallas</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        c1,c2 = st.columns(2)
+with c2:
+    st.markdown(f"""
+    <div class='card'>
+    <div class='kpi-title'>MTTR</div>
+    <div class='kpi-value'>{mttr:.1f} <span class='kpi-unit'>horas</span></div>
+    <div class='small-note'>Tiempo medio de reparación</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        fecha = c1.date_input("Fecha", date.today())
-        equipo = c2.text_input("Equipo")
+with c3:
+    st.markdown(f"""
+    <div class='card'>
+    <div class='kpi-title'>TOTAL FALLAS</div>
+    <div class='kpi-value'>{fallas}</div>
+    <div class='small-note'>Registros totales</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        c3,c4,c5 = st.columns(3)
+with c4:
+    st.markdown(f"""
+    <div class='card'>
+    <div class='kpi-title'>T. OPERATIVO</div>
+    <div class='kpi-value'>{tiempo_operativo:.0f} <span class='kpi-unit'>horas</span></div>
+    <div class='small-note'>Horas operativas totales</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        tiempo = c3.number_input("Tiempo Operativo (h)", 0.0, 9999.0, 40.0)
-        fallas = c4.number_input("Fallas", 0, 999, 1)
-        reparacion = c5.number_input("Tiempo Reparación (h)", 0.0, 9999.0, 2.0)
+st.write("")
 
-        submit = st.form_submit_button("💾 Guardar Registro")
+# ---------------------------------------------------
+# GRAFICOS SUPERIORES
+# ---------------------------------------------------
+g1,g2 = st.columns([1,2])
 
-        if submit:
-            nuevo = pd.DataFrame([{
-                "Fecha": fecha,
-                "Equipo": equipo,
-                "Tiempo Operativo": tiempo,
-                "Fallas": fallas,
-                "Tiempo Reparacion": reparacion
-            }])
+with g1:
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=disp*100,
+        number={'suffix': "%"},
+        gauge={
+            'axis': {'range': [0,100]},
+            'bar': {'color': "#10b981"},
+            'steps': [
+                {'range':[0,75], 'color':'#fee2e2'},
+                {'range':[75,90], 'color':'#fef3c7'},
+                {'range':[90,100], 'color':'#dcfce7'}
+            ]
+        }
+    ))
+    fig.update_layout(height=420, margin=dict(t=40,b=0,l=0,r=0), title="Disponibilidad")
+    st.plotly_chart(fig, use_container_width=True)
 
-            df2 = pd.concat([df, nuevo], ignore_index=True)
-            guardar(df2)
-            st.success("Registro guardado.")
-            st.rerun()
+with g2:
+    fallas_eq = df_f.groupby("Equipo")["Fallas"].sum().reset_index()
+    fig2 = px.bar(
+        fallas_eq,
+        x="Equipo",
+        y="Fallas",
+        title="Fallas por Equipo",
+        color_discrete_sequence=["#2563eb"]
+    )
+    fig2.update_layout(height=420)
+    st.plotly_chart(fig2, use_container_width=True)
 
-    st.divider()
+# ---------------------------------------------------
+# EVOLUCION
+# ---------------------------------------------------
+st.markdown("<div class='section-title'>Evolución de Indicadores</div>", unsafe_allow_html=True)
 
-    if not df.empty:
-        st.subheader("Historial")
-        st.dataframe(df, use_container_width=True)
+df_m = df[df["Año"] == año_sel].copy()
+df_m["MesNum"] = df_m["Fecha"].dt.month
 
-        if st.button("🗑 Eliminar todos los registros"):
-            os.remove(FILE)
-            st.success("Datos eliminados.")
-            st.rerun()
+grupo = df_m.groupby("MesNum").agg({
+    "Tiempo Operativo (h)":"sum",
+    "Fallas":"sum",
+    "Tiempo Reparación (h)":"sum"
+}).reset_index()
 
-# ----------------------------------------------------------
-# DASHBOARD
-# ----------------------------------------------------------
-if menu == "Dashboard":
+grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
+grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
+grupo["Disponibilidad"] = grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"]) * 100
 
-    st.title("📊 Dashboard de Mantenimiento")
-    st.caption("Indicadores clave de rendimiento")
+meses_n = {
+1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",
+7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"
+}
+grupo["Mes"] = grupo["MesNum"].map(meses_n)
 
-    if df.empty:
-        st.warning("No hay registros cargados.")
-        st.stop()
+x1,x2,x3 = st.columns(3)
 
-    # FILTROS
-    c1,c2 = st.columns(2)
+with x1:
+    fig3 = px.line(grupo, x="Mes", y="MTBF", markers=True, title=f"MTBF — {año_sel}")
+    fig3.update_layout(height=320)
+    st.plotly_chart(fig3, use_container_width=True)
 
-    años = sorted(df["Año"].unique())
-    año = c1.selectbox("Año", años)
+with x2:
+    fig4 = px.line(grupo, x="Mes", y="MTTR", markers=True, title=f"MTTR — {año_sel}",
+                   color_discrete_sequence=["orange"])
+    fig4.update_layout(height=320)
+    st.plotly_chart(fig4, use_container_width=True)
 
-    meses = ["Todos"] + list(range(1,13))
-    mes = c2.selectbox("Mes", meses)
-
-    dff = df[df["Año"] == año]
-
-    if mes != "Todos":
-        dff = dff[dff["Mes"] == mes]
-
-    # KPIS
-    mtbf, mttr, fall, op, disp = kpis(dff)
-
-    k1,k2,k3,k4 = st.columns(4)
-
-    k1.metric("MTBF", f"{mtbf:.1f} h")
-    k2.metric("MTTR", f"{mttr:.1f} h")
-    k3.metric("Total Fallas", int(fall))
-    k4.metric("Disponibilidad", f"{disp:.1f}%")
-
-    st.divider()
-
-    # PRIMERA FILA
-    a,b = st.columns(2)
-
-    with a:
-        gauge = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=disp,
-            title={'text': "Disponibilidad"},
-            gauge={'axis': {'range': [0,100]}}
-        ))
-        st.plotly_chart(gauge, use_container_width=True)
-
-    with b:
-        fallas_equipo = dff.groupby("Equipo")["Fallas"].sum().reset_index()
-
-        fig = px.bar(
-            fallas_equipo,
-            x="Equipo",
-            y="Fallas",
-            title="Fallas por Equipo"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    # ------------------------------------------------------
-    # SI ES ANUAL => GRAFICOS MENSUALES
-    # ------------------------------------------------------
-    if mes == "Todos":
-
-        resumen = []
-
-        for m in range(1,13):
-            temp = df[(df["Año"] == año) & (df["Mes"] == m)]
-
-            mtbf_m, mttr_m, _, _, disp_m = kpis(temp)
-
-            resumen.append({
-                "Mes": m,
-                "MTBF": mtbf_m,
-                "MTTR": mttr_m,
-                "Disponibilidad": disp_m
-            })
-
-        evo = pd.DataFrame(resumen)
-
-        c1,c2 = st.columns(2)
-
-        with c1:
-            fig = px.line(
-                evo,
-                x="Mes",
-                y="MTBF",
-                markers=True,
-                title="Evolución MTBF"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with c2:
-            fig = px.line(
-                evo,
-                x="Mes",
-                y="MTTR",
-                markers=True,
-                title="Evolución MTTR"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        fig = px.line(
-            evo,
-            x="Mes",
-            y="Disponibilidad",
-            markers=True,
-            title="Evolución Disponibilidad"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    # ------------------------------------------------------
-    # SI FILTRA MES => DISPONIBILIDAD DIARIA
-    # ------------------------------------------------------
-    else:
-
-        resumen = []
-
-        for d in sorted(dff["Dia"].unique()):
-            temp = dff[dff["Dia"] == d]
-            _, _, _, _, disp_d = kpis(temp)
-
-            resumen.append({
-                "Día": d,
-                "Disponibilidad": disp_d
-            })
-
-        diario = pd.DataFrame(resumen)
-
-        fig = px.line(
-            diario,
-            x="Día",
-            y="Disponibilidad",
-            markers=True,
-            title="Disponibilidad diaria"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
+with x3:
+    fig5 = px.line(grupo, x="Mes", y="Disponibilidad", markers=True,
+                   title=f"Disponibilidad — {año_sel}",
+                   color_discrete_sequence=["green"])
+    fig5.add_hline(y=90, line_dash="dash", line_color="green")
+    fig5.add_hline(y=75, line_dash="dash", line_color="orange")
+    fig5.update_layout(height=320)
+    st.plotly_chart(fig5, use_container_width=True)
