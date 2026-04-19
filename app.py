@@ -252,15 +252,6 @@ with g2:
         paper_bgcolor="rgba(0,0,0,0)"
     )
 
-    equipo_click = st.selectbox(
-        "🎯 Filtrar desde gráfico",
-        ["Todos"] + list(fe["Equipo"])
-    )
-
-    if equipo_click != "Todos":
-        df_f = df_f[df_f["Equipo"] == equipo_click]
-
-    st.plotly_chart(fig2,use_container_width=True)
 
 # ---------------------------------------------------
 # EVOLUCION
