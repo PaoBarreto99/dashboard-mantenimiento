@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
-from streamlit_plotly_events import plotly_events
 
 # ---------------------------------------------------
 # CONFIG
@@ -15,13 +14,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# SESSION STATE
-# ---------------------------------------------------
-if "equipo_click" not in st.session_state:
-    st.session_state.equipo_click = None
-
-# ---------------------------------------------------
-# CSS
+# ESTILO PREMIUM
 # ---------------------------------------------------
 st.markdown("""
 <style>
@@ -30,8 +23,9 @@ html, body, [class*="css"] {
     background: linear-gradient(180deg,#eef2ff,#f8fafc);
 }
 
+/* ocultar sidebar */
 section[data-testid="stSidebar"] {
-    display:none;
+    display: none;
 }
 
 .block-container {
@@ -40,22 +34,27 @@ section[data-testid="stSidebar"] {
     padding-bottom: 2rem;
 }
 
+/* TITULOS */
 h1 {
-    color:#0f172a !important;
-    font-weight:800 !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
 }
 
+/* FILTROS */
 .filter-box {
     background: linear-gradient(135deg,#1e293b,#334155);
-    padding:18px;
-    border-radius:18px;
-    margin-bottom:20px;
+    padding: 18px;
+    border-radius: 18px;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.12);
 }
 
+/* CARDS KPI */
 .card {
-    padding:24px;
-    border-radius:18px;
-    color:white;
+    padding: 24px;
+    border-radius: 18px;
+    color: white;
+    box-shadow: 0 10px 24px rgba(0,0,0,.10);
 }
 
 .card1 { background: linear-gradient(135deg,#2563eb,#1d4ed8); }
@@ -64,32 +63,34 @@ h1 {
 .card4 { background: linear-gradient(135deg,#059669,#047857); }
 
 .kpi-title {
-    font-size:14px;
-    opacity:.9;
+    font-size: 14px;
+    opacity: .9;
 }
 
 .kpi-value {
-    font-size:38px;
-    font-weight:800;
+    font-size: 38px;
+    font-weight: 800;
+    margin-top: 8px;
 }
 
+/* secciones */
 .section-title {
-    font-size:28px;
-    font-weight:800;
-    color:#0f172a;
-    margin-top:20px;
+    font-size: 28px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-top: 12px;
+    margin-bottom: 10px;
 }
 
-.table-box {
-    background:white;
-    padding:10px;
-    border-radius:18px;
+/* eliminar espacios visuales extras */
+[data-testid="stVerticalBlock"] > div:empty {
+    display:none;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# CSV
+# LEER CSV
 # ---------------------------------------------------
 archivo = Path("datos_mantenimiento.csv")
 
@@ -106,6 +107,9 @@ df = pd.read_csv(
 
 df.columns = df.columns.str.strip()
 
+# ---------------------------------------------------
+# FECHA ROBUSTA
+# ---------------------------------------------------
 df["Fecha"] = pd.to_datetime(
     df["Fecha"],
     errors="coerce",
@@ -115,7 +119,7 @@ df["Fecha"] = pd.to_datetime(
 df = df.dropna(subset=["Fecha"])
 
 # ---------------------------------------------------
-# FECHAS
+# FECHAS AUX
 # ---------------------------------------------------
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
@@ -134,16 +138,20 @@ df["Mes"] = df["MesNum"].map(meses)
 st.title("Dashboard de Mantenimiento")
 
 # ---------------------------------------------------
-# FILTROS
+# FILTROS TOP
 # ---------------------------------------------------
 st.markdown("<div class='filter-box'>", unsafe_allow_html=True)
 
-f1,f2,f3 = st.columns([2,2,1])
+f1, f2, f3 = st.columns([2,2,1])
 
 años = sorted(df["Año"].unique())
 
 with f1:
-    año_sel = st.selectbox("📅 Año", años, index=len(años)-1)
+    año_sel = st.selectbox(
+        "📅 Año",
+        años,
+        index=len(años)-1
+    )
 
 with f2:
     mes_sel = st.selectbox(
@@ -152,15 +160,16 @@ with f2:
     )
 
 with f3:
-    limpiar = st.button("🧹 Limpiar", use_container_width=True)
+    limpiar = st.button("🧹 Borrar filtros", use_container_width=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 if limpiar:
-    st.session_state.equipo_click = None
+    año_sel = max(años)
+    mes_sel = "Todos"
 
 # ---------------------------------------------------
-# FILTRO BASE
+# FILTRO DATA
 # ---------------------------------------------------
 df_f = df[df["Año"] == año_sel].copy()
 
@@ -179,7 +188,7 @@ mttr = t_rep / fallas if fallas > 0 else 0
 disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr) > 0 else 0
 
 # ---------------------------------------------------
-# CARDS
+# KPI CARDS
 # ---------------------------------------------------
 c1,c2,c3,c4 = st.columns(4)
 
@@ -200,7 +209,7 @@ for col, item in zip([c1,c2,c3,c4], cards):
         """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# GRAFICOS
+# GRAFICOS SUPERIORES
 # ---------------------------------------------------
 g1,g2 = st.columns([1,2])
 
@@ -209,10 +218,24 @@ with g1:
         mode="gauge+number",
         value=disp,
         number={"suffix":"%"},
-        gauge={"axis":{"range":[0,100]}}
+        gauge={
+            "axis":{"range":[0,100]},
+            "bar":{"color":"#10b981"},
+            "steps":[
+                {"range":[0,75],"color":"#fecaca"},
+                {"range":[75,90],"color":"#fde68a"},
+                {"range":[90,100],"color":"#bbf7d0"}
+            ]
+        }
     ))
-    fig.update_layout(height=420,title="Disponibilidad")
-    st.plotly_chart(fig,use_container_width=True)
+
+    fig.update_layout(
+        height=420,
+        title="Disponibilidad",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 with g2:
     fe = df_f.groupby("Equipo")["Fallas"].sum().reset_index()
@@ -222,25 +245,19 @@ with g2:
         x="Equipo",
         y="Fallas",
         title="Fallas por Equipo",
-        color="Equipo"
+        color="Equipo",
+        color_discrete_sequence=[
+            "#2563eb","#7c3aed","#f59e0b","#059669","#dc2626"
+        ]
     )
 
-    selected = plotly_events(
-        fig2,
-        click_event=True,
-        hover_event=False,
-        key="grafico_equipo"
+    fig2.update_layout(
+        height=420,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,.55)"
     )
 
-    if selected:
-        idx = selected[0]["pointIndex"]
-        st.session_state.equipo_click = fe.iloc[idx]["Equipo"]
-
-# ---------------------------------------------------
-# FILTRO CLICK BARRA
-# ---------------------------------------------------
-if st.session_state.equipo_click:
-    df_f = df_f[df_f["Equipo"] == st.session_state.equipo_click]
+    st.plotly_chart(fig2, use_container_width=True)
 
 # ---------------------------------------------------
 # EVOLUCION
@@ -251,76 +268,86 @@ st.markdown(
 )
 
 if mes_sel != "Todos":
+
     grupo = df_f.groupby("Dia").agg({
         "Tiempo Operativo (h)":"sum",
         "Fallas":"sum",
         "Tiempo Reparación (h)":"sum"
     }).reset_index()
 
+    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
+    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
+    grupo["Disponibilidad"] = (
+        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
+    )*100
+
     eje = "Dia"
-    titulo = mes_sel
+    titulo = f"{mes_sel} {año_sel}"
 
 else:
+
     grupo = df_f.groupby(["MesNum","Mes"]).agg({
         "Tiempo Operativo (h)":"sum",
         "Fallas":"sum",
         "Tiempo Reparación (h)":"sum"
     }).reset_index()
 
+    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
+    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
+    grupo["Disponibilidad"] = (
+        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
+    )*100
+
     grupo = grupo.sort_values("MesNum")
+
     eje = "Mes"
     titulo = str(año_sel)
-
-grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
-grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
-grupo["Disponibilidad"] = (
-    grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-)*100
 
 x1,x2,x3 = st.columns(3)
 
 with x1:
-    st.plotly_chart(
-        px.line(grupo,x=eje,y="MTBF",markers=True,title=f"MTBF - {titulo}"),
-        use_container_width=True
+    fig3 = px.line(
+        grupo,
+        x=eje,
+        y="MTBF",
+        markers=True,
+        title=f"MTBF - {titulo}",
+        color_discrete_sequence=["#2563eb"]
     )
+    fig3.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,.55)"
+    )
+    st.plotly_chart(fig3,use_container_width=True)
 
 with x2:
-    st.plotly_chart(
-        px.line(grupo,x=eje,y="MTTR",markers=True,title=f"MTTR - {titulo}"),
-        use_container_width=True
+    fig4 = px.line(
+        grupo,
+        x=eje,
+        y="MTTR",
+        markers=True,
+        title=f"MTTR - {titulo}",
+        color_discrete_sequence=["#f59e0b"]
     )
+    fig4.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,.55)"
+    )
+    st.plotly_chart(fig4,use_container_width=True)
 
 with x3:
-    st.plotly_chart(
-        px.line(grupo,x=eje,y="Disponibilidad",markers=True,title=f"Disponibilidad - {titulo}"),
-        use_container_width=True
+    fig5 = px.line(
+        grupo,
+        x=eje,
+        y="Disponibilidad",
+        markers=True,
+        title=f"Disponibilidad - {titulo}",
+        color_discrete_sequence=["#059669"]
     )
-
-# ---------------------------------------------------
-# TABLA
-# ---------------------------------------------------
-st.markdown(
-    "<div class='section-title'>Detalle de Registros</div>",
-    unsafe_allow_html=True
-)
-
-tabla = df_f[[
-    "Fecha",
-    "Equipo",
-    "Tiempo Operativo (h)",
-    "Fallas",
-    "Tiempo Reparación (h)"
-]].copy()
-
-tabla["Fecha"] = tabla["Fecha"].dt.strftime("%d/%m/%Y")
-
-st.markdown("<div class='table-box'>", unsafe_allow_html=True)
-
-st.dataframe(
-    tabla,
-    use_container_width=True,
-    hide_index=True
-)
-
-st.markdown("</div>", unsafe_allow_html=True)
+    fig5.add_hline(y=90,line_dash="dash")
+    fig5.add_hline(y=75,line_dash="dash")
+    fig5.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,.55)"
+    )
+    st.plotly_chart(fig5,use_container_width=True)
