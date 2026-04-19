@@ -13,8 +13,10 @@ st.set_page_config(
     layout="wide"
 )
 
+ARCHIVO = "datos_mantenimiento.csv"
+
 # ---------------------------------------------------
-# ESTILO PREMIUM
+# ESTILO
 # ---------------------------------------------------
 st.markdown("""
 <style>
@@ -30,20 +32,6 @@ section[data-testid="stSidebar"] {
 .block-container {
     max-width: 1600px;
     padding-top: 1rem;
-    padding-bottom: 2rem;
-}
-
-h1 {
-    color:#0f172a !important;
-    font-weight:800 !important;
-}
-
-.filter-box {
-    background: linear-gradient(135deg,#1e293b,#334155);
-    padding:18px;
-    border-radius:18px;
-    margin-bottom:20px;
-    box-shadow:0 10px 24px rgba(0,0,0,.12);
 }
 
 .card {
@@ -58,15 +46,14 @@ h1 {
 .card3 { background: linear-gradient(135deg,#f59e0b,#d97706); }
 .card4 { background: linear-gradient(135deg,#059669,#047857); }
 
-.kpi-title {
-    font-size:14px;
-    opacity:.9;
-}
+.kpi-title {font-size:14px;}
+.kpi-value {font-size:38px;font-weight:800;}
 
-.kpi-value {
-    font-size:38px;
-    font-weight:800;
-    margin-top:8px;
+.filter-box {
+    background: linear-gradient(135deg,#1e293b,#334155);
+    padding:18px;
+    border-radius:18px;
+    margin-bottom:20px;
 }
 
 .section-title {
@@ -74,25 +61,42 @@ h1 {
     font-weight:800;
     color:#0f172a;
     margin-top:20px;
-    margin-bottom:10px;
-}
-
-.table-box {
-    background:white;
-    border-radius:18px;
-    padding:10px;
-    box-shadow:0 10px 24px rgba(0,0,0,.08);
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# LEER CSV
+# PANEL ADMIN SUBIR CSV
 # ---------------------------------------------------
-archivo = Path("datos_mantenimiento.csv")
+with st.expander("🔐 Administración / Actualizar Datos"):
+
+    clave = st.text_input(
+        "Contraseña",
+        type="password"
+    )
+
+    if clave == "admin123":
+
+        nuevo = st.file_uploader(
+            "Subir nuevo CSV",
+            type=["csv"]
+        )
+
+        if nuevo is not None:
+
+            with open(ARCHIVO, "wb") as f:
+                f.write(nuevo.getbuffer())
+
+            st.success("CSV actualizado correctamente")
+            st.rerun()
+
+# ---------------------------------------------------
+# CARGAR CSV
+# ---------------------------------------------------
+archivo = Path(ARCHIVO)
 
 if not archivo.exists():
-    st.error("No se encontró datos_mantenimiento.csv")
+    st.error("No existe datos_mantenimiento.csv")
     st.stop()
 
 df = pd.read_csv(
@@ -104,9 +108,6 @@ df = pd.read_csv(
 
 df.columns = df.columns.str.strip()
 
-# ---------------------------------------------------
-# FECHA ROBUSTA
-# ---------------------------------------------------
 df["Fecha"] = pd.to_datetime(
     df["Fecha"],
     errors="coerce",
@@ -116,7 +117,7 @@ df["Fecha"] = pd.to_datetime(
 df = df.dropna(subset=["Fecha"])
 
 # ---------------------------------------------------
-# FECHAS AUX
+# FECHAS
 # ---------------------------------------------------
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
@@ -153,7 +154,7 @@ with f1:
 with f2:
     mes_sel = st.selectbox(
         "📌 Mes",
-        ["Todos"] + list(df["Mes"].dropna().unique())
+        ["Todos"] + list(df["Mes"].unique())
     )
 
 with f3:
@@ -163,7 +164,7 @@ with f3:
     )
 
 with f4:
-    limpiar = st.button("🧹 Limpiar", use_container_width=True)
+    limpiar = st.button("🧹 Limpiar")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -192,10 +193,10 @@ t_rep = df_f["Tiempo Reparación (h)"].sum()
 
 mtbf = t_op / fallas if fallas > 0 else 0
 mttr = t_rep / fallas if fallas > 0 else 0
-disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr) > 0 else 0
+disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr)>0 else 0
 
 # ---------------------------------------------------
-# CARDS
+# KPI CARDS
 # ---------------------------------------------------
 c1,c2,c3,c4 = st.columns(4)
 
@@ -206,12 +207,12 @@ cards = [
 ("DISPONIBILIDAD", f"{disp:.1f}%", "card4")
 ]
 
-for col, item in zip([c1,c2,c3,c4], cards):
+for col,item in zip([c1,c2,c3,c4],cards):
     with col:
         st.markdown(f"""
         <div class="card {item[2]}">
-            <div class="kpi-title">{item[0]}</div>
-            <div class="kpi-value">{item[1]}</div>
+        <div class="kpi-title">{item[0]}</div>
+        <div class="kpi-value">{item[1]}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -227,16 +228,10 @@ with g1:
         number={"suffix":"%"},
         gauge={
             "axis":{"range":[0,100]},
-            "bar":{"color":"#10b981"}
+            "bar":{"color":"green"}
         }
     ))
-
-    fig.update_layout(
-        height=420,
-        title="Disponibilidad",
-        paper_bgcolor="rgba(0,0,0,0)"
-    )
-
+    fig.update_layout(height=420,title="Disponibilidad")
     st.plotly_chart(fig,use_container_width=True)
 
 with g2:
@@ -250,101 +245,28 @@ with g2:
         color="Equipo"
     )
 
-    fig2.update_layout(
-        height=420,
-        paper_bgcolor="rgba(0,0,0,0)"
-    )
-
+    fig2.update_layout(height=420)
     st.plotly_chart(fig2,use_container_width=True)
 
 # ---------------------------------------------------
-# EVOLUCION
-# ---------------------------------------------------
-st.markdown(
-    "<div class='section-title'>Evolución de Indicadores</div>",
-    unsafe_allow_html=True
-)
-
-if mes_sel != "Todos":
-
-    grupo = df_f.groupby("Dia").agg({
-        "Tiempo Operativo (h)":"sum",
-        "Fallas":"sum",
-        "Tiempo Reparación (h)":"sum"
-    }).reset_index()
-
-    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
-    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
-    grupo["Disponibilidad"] = (
-        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-    )*100
-
-    eje = "Dia"
-    titulo = f"{mes_sel} {año_sel}"
-
-else:
-
-    grupo = df_f.groupby(["MesNum","Mes"]).agg({
-        "Tiempo Operativo (h)":"sum",
-        "Fallas":"sum",
-        "Tiempo Reparación (h)":"sum"
-    }).reset_index()
-
-    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
-    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
-    grupo["Disponibilidad"] = (
-        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-    )*100
-
-    grupo = grupo.sort_values("MesNum")
-
-    eje = "Mes"
-    titulo = str(año_sel)
-
-x1,x2,x3 = st.columns(3)
-
-with x1:
-    st.plotly_chart(
-        px.line(grupo,x=eje,y="MTBF",markers=True,title=f"MTBF - {titulo}"),
-        use_container_width=True
-    )
-
-with x2:
-    st.plotly_chart(
-        px.line(grupo,x=eje,y="MTTR",markers=True,title=f"MTTR - {titulo}"),
-        use_container_width=True
-    )
-
-with x3:
-    st.plotly_chart(
-        px.line(grupo,x=eje,y="Disponibilidad",markers=True,title=f"Disponibilidad - {titulo}"),
-        use_container_width=True
-    )
-
-# ---------------------------------------------------
-# DETALLE TABLA
+# TABLA
 # ---------------------------------------------------
 st.markdown(
     "<div class='section-title'>Detalle de Registros</div>",
     unsafe_allow_html=True
 )
 
-mostrar = df_f[[
-    "Fecha",
-    "Equipo",
-    "Tiempo Operativo (h)",
-    "Fallas",
-    "Tiempo Reparación (h)"
-]].copy()
-
+mostrar = df_f.copy()
 mostrar["Fecha"] = mostrar["Fecha"].dt.strftime("%d/%m/%Y")
 
-st.markdown("<div class='table-box'>", unsafe_allow_html=True)
-
 st.dataframe(
-    mostrar,
+    mostrar[[
+        "Fecha",
+        "Equipo",
+        "Tiempo Operativo (h)",
+        "Fallas",
+        "Tiempo Reparación (h)"
+    ]],
     use_container_width=True,
     hide_index=True
 )
-
-st.markdown("</div>", unsafe_allow_html=True)
