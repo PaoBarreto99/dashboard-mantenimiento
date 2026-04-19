@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from pathlib import Path
 
 # ---------------------------------------------------
-# CONFIG
+# CONFIGURACION
 # ---------------------------------------------------
 st.set_page_config(
     page_title="Dashboard de Mantenimiento",
@@ -26,51 +27,43 @@ html, body, [class*="css"] {
     max-width: 1600px;
 }
 
-h1 {
-    font-size: 42px !important;
-    font-weight: 800 !important;
-}
-
 .card {
     background: white;
-    padding: 25px;
+    padding: 24px;
     border-radius: 16px;
-    border: 1px solid #eee;
+    border: 1px solid #ececec;
     box-shadow: 0 2px 8px rgba(0,0,0,.03);
 }
 
 .kpi-title {
     font-size: 14px;
-    color: gray;
+    color: #6b7280;
 }
 
 .kpi-value {
-    font-size: 38px;
-    font-weight: bold;
+    font-size: 36px;
+    font-weight: 700;
+    color: #111827;
 }
 
 .section-title {
     font-size: 28px;
-    font-weight: bold;
-    margin-top: 20px;
+    font-weight: 700;
+    margin-top: 25px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# SIDEBAR
+# CARGAR CSV DESDE GITHUB / REPO
 # ---------------------------------------------------
-st.sidebar.title("🔧 MaintDash")
-archivo = st.sidebar.file_uploader("Subir Excel", type=["xlsx"])
+archivo = Path("datos_mantenimiento.csv")
 
-if archivo is None:
-    st.info("Subí el archivo datos_mantenimiento.xlsx")
+if not archivo.exists():
+    st.error("No se encontró datos_mantenimiento.csv en GitHub / repositorio.")
     st.stop()
 
-# ---------------------------------------------------
-# LEER EXCEL
-# ---------------------------------------------------
-df = pd.read_excel(archivo)
+df = pd.read_csv(archivo)
 
 # ---------------------------------------------------
 # VALIDAR COLUMNAS
@@ -85,13 +78,15 @@ columnas = [
 
 for col in columnas:
     if col not in df.columns:
-        st.error(f"Falta columna: {col}")
+        st.error(f"Falta columna obligatoria: {col}")
         st.stop()
 
 # ---------------------------------------------------
-# FECHAS
+# PREPARAR DATOS
 # ---------------------------------------------------
-df["Fecha"] = pd.to_datetime(df["Fecha"])
+df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
+df = df.dropna(subset=["Fecha"])
+
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
 
@@ -103,23 +98,29 @@ meses = {
 df["Mes"] = df["MesNum"].map(meses)
 
 # ---------------------------------------------------
-# FILTROS
+# SIDEBAR
 # ---------------------------------------------------
+st.sidebar.title("🔧 MaintDash")
+st.sidebar.success("Datos cargados desde CSV")
+
 años = sorted(df["Año"].unique())
-año_sel = st.sidebar.selectbox("Año", años)
+año_sel = st.sidebar.selectbox("Año", años, index=len(años)-1)
 
 mes_sel = st.sidebar.selectbox(
     "Mes",
-    ["Todos"] + list(df["Mes"].unique())
+    ["Todos"] + list(df["Mes"].dropna().unique())
 )
 
-df_f = df[df["Año"] == año_sel]
+# ---------------------------------------------------
+# FILTRO
+# ---------------------------------------------------
+df_f = df[df["Año"] == año_sel].copy()
 
 if mes_sel != "Todos":
     df_f = df_f[df_f["Mes"] == mes_sel]
 
 # ---------------------------------------------------
-# CALCULOS KPI
+# KPI
 # ---------------------------------------------------
 tiempo_operativo = df_f["Tiempo Operativo (h)"].sum()
 fallas = df_f["Fallas"].sum()
@@ -127,55 +128,55 @@ tiempo_rep = df_f["Tiempo Reparación (h)"].sum()
 
 mtbf = tiempo_operativo / fallas if fallas > 0 else 0
 mttr = tiempo_rep / fallas if fallas > 0 else 0
-disp = mtbf / (mtbf + mttr) * 100 if (mtbf + mttr) > 0 else 0
+disp = (mtbf / (mtbf + mttr)) * 100 if (mtbf + mttr) > 0 else 0
 
 # ---------------------------------------------------
-# TITULO
+# HEADER
 # ---------------------------------------------------
 st.title("Dashboard de Mantenimiento")
-st.write("Indicadores clave de rendimiento")
+st.caption("Indicadores clave de rendimiento")
 
 # ---------------------------------------------------
-# KPI CARDS
+# CARDS
 # ---------------------------------------------------
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
     st.markdown(f"""
-    <div class='card'>
-    <div class='kpi-title'>MTBF</div>
-    <div class='kpi-value'>{mtbf:.1f}</div>
+    <div class="card">
+        <div class="kpi-title">MTBF</div>
+        <div class="kpi-value">{mtbf:.1f}</div>
     </div>
     """, unsafe_allow_html=True)
 
 with c2:
     st.markdown(f"""
-    <div class='card'>
-    <div class='kpi-title'>MTTR</div>
-    <div class='kpi-value'>{mttr:.1f}</div>
+    <div class="card">
+        <div class="kpi-title">MTTR</div>
+        <div class="kpi-value">{mttr:.1f}</div>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
     st.markdown(f"""
-    <div class='card'>
-    <div class='kpi-title'>TOTAL FALLAS</div>
-    <div class='kpi-value'>{fallas}</div>
+    <div class="card">
+        <div class="kpi-title">TOTAL FALLAS</div>
+        <div class="kpi-value">{int(fallas)}</div>
     </div>
     """, unsafe_allow_html=True)
 
 with c4:
     st.markdown(f"""
-    <div class='card'>
-    <div class='kpi-title'>T. OPERATIVO</div>
-    <div class='kpi-value'>{tiempo_operativo:.0f}</div>
+    <div class="card">
+        <div class="kpi-title">T. OPERATIVO</div>
+        <div class="kpi-value">{tiempo_operativo:.0f}</div>
     </div>
     """, unsafe_allow_html=True)
 
 st.write("")
 
 # ---------------------------------------------------
-# GRAFICOS SUPERIORES
+# GRAFICOS
 # ---------------------------------------------------
 g1, g2 = st.columns([1,2])
 
@@ -186,10 +187,15 @@ with g1:
         number={"suffix":"%"},
         gauge={
             "axis":{"range":[0,100]},
-            "bar":{"color":"green"}
+            "bar":{"color":"green"},
+            "steps":[
+                {"range":[0,75], "color":"#fee2e2"},
+                {"range":[75,90], "color":"#fef3c7"},
+                {"range":[90,100], "color":"#dcfce7"}
+            ]
         }
     ))
-    fig.update_layout(height=400, title="Disponibilidad")
+    fig.update_layout(height=420, title="Disponibilidad")
     st.plotly_chart(fig, use_container_width=True)
 
 with g2:
@@ -199,10 +205,10 @@ with g2:
         fallas_eq,
         x="Equipo",
         y="Fallas",
-        title="Fallas por Equipo"
+        title="Fallas por Equipo",
+        color_discrete_sequence=["#2563eb"]
     )
-
-    fig2.update_layout(height=400)
+    fig2.update_layout(height=420)
     st.plotly_chart(fig2, use_container_width=True)
 
 # ---------------------------------------------------
@@ -213,13 +219,15 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-df_y = df[df["Año"] == año_sel]
+df_y = df[df["Año"] == año_sel].copy()
 
-grupo = df_y.groupby("Mes").agg({
+grupo = df_y.groupby("MesNum").agg({
     "Tiempo Operativo (h)":"sum",
     "Fallas":"sum",
     "Tiempo Reparación (h)":"sum"
 }).reset_index()
+
+grupo["Mes"] = grupo["MesNum"].map(meses)
 
 grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
 grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
@@ -231,30 +239,25 @@ x1, x2, x3 = st.columns(3)
 
 with x1:
     fig3 = px.line(
-        grupo,
-        x="Mes",
-        y="MTBF",
-        markers=True,
-        title="MTBF"
+        grupo, x="Mes", y="MTBF",
+        markers=True, title="MTBF"
     )
     st.plotly_chart(fig3, use_container_width=True)
 
 with x2:
     fig4 = px.line(
-        grupo,
-        x="Mes",
-        y="MTTR",
-        markers=True,
-        title="MTTR"
+        grupo, x="Mes", y="MTTR",
+        markers=True, title="MTTR",
+        color_discrete_sequence=["orange"]
     )
     st.plotly_chart(fig4, use_container_width=True)
 
 with x3:
     fig5 = px.line(
-        grupo,
-        x="Mes",
-        y="Disponibilidad",
-        markers=True,
-        title="Disponibilidad"
+        grupo, x="Mes", y="Disponibilidad",
+        markers=True, title="Disponibilidad",
+        color_discrete_sequence=["green"]
     )
+    fig5.add_hline(y=90, line_dash="dash")
+    fig5.add_hline(y=75, line_dash="dash")
     st.plotly_chart(fig5, use_container_width=True)
