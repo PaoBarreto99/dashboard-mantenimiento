@@ -104,6 +104,9 @@ df = pd.read_csv(
 
 df.columns = df.columns.str.strip()
 
+# ---------------------------------------------------
+# FECHA ROBUSTA
+# ---------------------------------------------------
 df["Fecha"] = pd.to_datetime(
     df["Fecha"],
     errors="coerce",
@@ -113,7 +116,7 @@ df["Fecha"] = pd.to_datetime(
 df = df.dropna(subset=["Fecha"])
 
 # ---------------------------------------------------
-# FECHAS
+# FECHAS AUX
 # ---------------------------------------------------
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
@@ -252,14 +255,6 @@ with g2:
         paper_bgcolor="rgba(0,0,0,0)"
     )
 
-    equipo_click = st.selectbox(
-        "🎯 Filtrar desde gráfico",
-        ["Todos"] + list(fe["Equipo"])
-    )
-
-    if equipo_click != "Todos":
-        df_f = df_f[df_f["Equipo"] == equipo_click]
-
     st.plotly_chart(fig2,use_container_width=True)
 
 # ---------------------------------------------------
@@ -327,7 +322,7 @@ with x3:
     )
 
 # ---------------------------------------------------
-# DETALLE TABLA EXCEL
+# DETALLE TABLA
 # ---------------------------------------------------
 st.markdown(
     "<div class='section-title'>Detalle de Registros</div>",
