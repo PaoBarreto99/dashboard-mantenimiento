@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from pathlib import Path
 
 # ---------------------------------------------------
-# CONFIGURACION
+# CONFIG
 # ---------------------------------------------------
 st.set_page_config(
     page_title="Dashboard de Mantenimiento",
@@ -14,12 +14,13 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# ESTILO
+# CSS PRO
 # ---------------------------------------------------
 st.markdown("""
 <style>
 html, body, [class*="css"] {
-    font-family: Arial, sans-serif;
+    font-family: Inter, sans-serif;
+    background-color: #f8fafc;
 }
 
 .block-container {
@@ -27,12 +28,21 @@ html, body, [class*="css"] {
     max-width: 1600px;
 }
 
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg,#1e3a8a,#2563eb);
+    color: white;
+}
+
+section[data-testid="stSidebar"] * {
+    color: white !important;
+}
+
 .card {
     background: white;
     padding: 24px;
-    border-radius: 16px;
-    border: 1px solid #ececec;
-    box-shadow: 0 2px 8px rgba(0,0,0,.03);
+    border-radius: 18px;
+    border: 1px solid #edf0f4;
+    box-shadow: 0 4px 14px rgba(0,0,0,.05);
 }
 
 .kpi-title {
@@ -41,34 +51,39 @@ html, body, [class*="css"] {
 }
 
 .kpi-value {
-    font-size: 36px;
-    font-weight: 700;
+    font-size: 38px;
+    font-weight: 800;
     color: #111827;
 }
 
 .section-title {
     font-size: 28px;
-    font-weight: 700;
-    margin-top: 25px;
+    font-weight: 800;
+    margin-top: 15px;
+}
+
+small {
+    color:#6b7280;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# CARGAR CSV DESDE GITHUB / REPO
+# LEER CSV
 # ---------------------------------------------------
 archivo = Path("datos_mantenimiento.csv")
 
 if not archivo.exists():
-    st.error("No se encontró datos_mantenimiento.csv en GitHub / repositorio.")
+    st.error("Subí datos_mantenimiento.csv al repositorio GitHub")
     st.stop()
 
-df = pd.read_csv(archivo)
+df = pd.read_csv(archivo, sep=None, engine="python")
+df.columns = df.columns.str.strip()
 
 # ---------------------------------------------------
-# VALIDAR COLUMNAS
+# VALIDAR
 # ---------------------------------------------------
-columnas = [
+cols = [
     "Fecha",
     "Equipo",
     "Tiempo Operativo (h)",
@@ -76,23 +91,23 @@ columnas = [
     "Tiempo Reparación (h)"
 ]
 
-for col in columnas:
-    if col not in df.columns:
-        st.error(f"Falta columna obligatoria: {col}")
+for c in cols:
+    if c not in df.columns:
+        st.error(f"Falta columna: {c}")
         st.stop()
 
 # ---------------------------------------------------
-# PREPARAR DATOS
+# FECHAS
 # ---------------------------------------------------
 df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
-df = df.dropna(subset=["Fecha"])
+df = df.dropna()
 
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
 
 meses = {
-    1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",
-    7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"
+1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",
+7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"
 }
 
 df["Mes"] = df["MesNum"].map(meses)
@@ -101,13 +116,13 @@ df["Mes"] = df["MesNum"].map(meses)
 # SIDEBAR
 # ---------------------------------------------------
 st.sidebar.title("🔧 MaintDash")
-st.sidebar.success("Datos cargados desde CSV")
+st.sidebar.markdown("### Gestión Inteligente")
 
 años = sorted(df["Año"].unique())
-año_sel = st.sidebar.selectbox("Año", años, index=len(años)-1)
+año_sel = st.sidebar.selectbox("📅 Año", años, index=len(años)-1)
 
 mes_sel = st.sidebar.selectbox(
-    "Mes",
+    "📌 Mes",
     ["Todos"] + list(df["Mes"].dropna().unique())
 )
 
@@ -122,30 +137,31 @@ if mes_sel != "Todos":
 # ---------------------------------------------------
 # KPI
 # ---------------------------------------------------
-tiempo_operativo = df_f["Tiempo Operativo (h)"].sum()
+t_op = df_f["Tiempo Operativo (h)"].sum()
 fallas = df_f["Fallas"].sum()
-tiempo_rep = df_f["Tiempo Reparación (h)"].sum()
+t_rep = df_f["Tiempo Reparación (h)"].sum()
 
-mtbf = tiempo_operativo / fallas if fallas > 0 else 0
-mttr = tiempo_rep / fallas if fallas > 0 else 0
-disp = (mtbf / (mtbf + mttr)) * 100 if (mtbf + mttr) > 0 else 0
+mtbf = t_op / fallas if fallas > 0 else 0
+mttr = t_rep / fallas if fallas > 0 else 0
+disp = (mtbf / (mtbf + mttr))*100 if (mtbf+mttr)>0 else 0
 
 # ---------------------------------------------------
 # HEADER
 # ---------------------------------------------------
 st.title("Dashboard de Mantenimiento")
-st.caption("Indicadores clave de rendimiento")
+st.caption("KPIs operativos y confiabilidad")
 
 # ---------------------------------------------------
-# CARDS
+# KPIS
 # ---------------------------------------------------
-c1, c2, c3, c4 = st.columns(4)
+c1,c2,c3,c4 = st.columns(4)
 
 with c1:
     st.markdown(f"""
     <div class="card">
         <div class="kpi-title">MTBF</div>
         <div class="kpi-value">{mtbf:.1f}</div>
+        <small>Horas entre fallas</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -154,6 +170,7 @@ with c2:
     <div class="card">
         <div class="kpi-title">MTTR</div>
         <div class="kpi-value">{mttr:.1f}</div>
+        <small>Horas reparación</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -162,23 +179,25 @@ with c3:
     <div class="card">
         <div class="kpi-title">TOTAL FALLAS</div>
         <div class="kpi-value">{int(fallas)}</div>
+        <small>Eventos registrados</small>
     </div>
     """, unsafe_allow_html=True)
 
 with c4:
     st.markdown(f"""
     <div class="card">
-        <div class="kpi-title">T. OPERATIVO</div>
-        <div class="kpi-value">{tiempo_operativo:.0f}</div>
+        <div class="kpi-title">DISPONIBILIDAD</div>
+        <div class="kpi-value">{disp:.1f}%</div>
+        <small>Eficiencia operacional</small>
     </div>
     """, unsafe_allow_html=True)
 
 st.write("")
 
 # ---------------------------------------------------
-# GRAFICOS
+# GRAFICOS TOP
 # ---------------------------------------------------
-g1, g2 = st.columns([1,2])
+g1,g2 = st.columns([1,2])
 
 with g1:
     fig = go.Figure(go.Indicator(
@@ -187,29 +206,30 @@ with g1:
         number={"suffix":"%"},
         gauge={
             "axis":{"range":[0,100]},
-            "bar":{"color":"green"},
+            "bar":{"color":"#10b981"},
             "steps":[
-                {"range":[0,75], "color":"#fee2e2"},
-                {"range":[75,90], "color":"#fef3c7"},
-                {"range":[90,100], "color":"#dcfce7"}
+                {"range":[0,75],"color":"#fee2e2"},
+                {"range":[75,90],"color":"#fef3c7"},
+                {"range":[90,100],"color":"#dcfce7"}
             ]
         }
     ))
-    fig.update_layout(height=420, title="Disponibilidad")
-    st.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(height=420,title="Disponibilidad")
+    st.plotly_chart(fig,use_container_width=True)
 
 with g2:
-    fallas_eq = df_f.groupby("Equipo")["Fallas"].sum().reset_index()
+    fe = df_f.groupby("Equipo")["Fallas"].sum().reset_index()
 
     fig2 = px.bar(
-        fallas_eq,
+        fe,
         x="Equipo",
         y="Fallas",
         title="Fallas por Equipo",
         color_discrete_sequence=["#2563eb"]
     )
+
     fig2.update_layout(height=420)
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2,use_container_width=True)
 
 # ---------------------------------------------------
 # EVOLUCION
@@ -221,43 +241,57 @@ st.markdown(
 
 df_y = df[df["Año"] == año_sel].copy()
 
-grupo = df_y.groupby("MesNum").agg({
+if mes_sel != "Todos":
+    df_y = df_y[df_y["Mes"] == mes_sel]
+
+grupo = df_y.groupby(["MesNum","Mes"]).agg({
     "Tiempo Operativo (h)":"sum",
     "Fallas":"sum",
     "Tiempo Reparación (h)":"sum"
 }).reset_index()
 
-grupo["Mes"] = grupo["MesNum"].map(meses)
-
 grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
 grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
 grupo["Disponibilidad"] = (
     grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-) * 100
+)*100
 
-x1, x2, x3 = st.columns(3)
+grupo = grupo.sort_values("MesNum")
+
+titulo = mes_sel if mes_sel != "Todos" else str(año_sel)
+
+x1,x2,x3 = st.columns(3)
 
 with x1:
     fig3 = px.line(
-        grupo, x="Mes", y="MTBF",
-        markers=True, title="MTBF"
+        grupo,
+        x="Mes",
+        y="MTBF",
+        markers=True,
+        title=f"MTBF - {titulo}"
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3,use_container_width=True)
 
 with x2:
     fig4 = px.line(
-        grupo, x="Mes", y="MTTR",
-        markers=True, title="MTTR",
+        grupo,
+        x="Mes",
+        y="MTTR",
+        markers=True,
+        title=f"MTTR - {titulo}",
         color_discrete_sequence=["orange"]
     )
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4,use_container_width=True)
 
 with x3:
     fig5 = px.line(
-        grupo, x="Mes", y="Disponibilidad",
-        markers=True, title="Disponibilidad",
+        grupo,
+        x="Mes",
+        y="Disponibilidad",
+        markers=True,
+        title=f"Disponibilidad - {titulo}",
         color_discrete_sequence=["green"]
     )
-    fig5.add_hline(y=90, line_dash="dash")
-    fig5.add_hline(y=75, line_dash="dash")
-    st.plotly_chart(fig5, use_container_width=True)
+    fig5.add_hline(y=90,line_dash="dash")
+    fig5.add_hline(y=75,line_dash="dash")
+    st.plotly_chart(fig5,use_container_width=True)
