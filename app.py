@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# CSS PRO
+# CSS
 # ---------------------------------------------------
 st.markdown("""
 <style>
@@ -23,18 +23,13 @@ html, body, [class*="css"] {
     background-color: #f8fafc;
 }
 
-.block-container {
-    padding-top: 1rem;
-    max-width: 1600px;
-}
-
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg,#1e3a8a,#2563eb);
-    color: white;
+    display: none;
 }
 
-section[data-testid="stSidebar"] * {
-    color: white !important;
+.block-container {
+    max-width: 1600px;
+    padding-top: 1rem;
 }
 
 .card {
@@ -62,86 +57,34 @@ section[data-testid="stSidebar"] * {
     margin-top: 15px;
 }
 
-small {
-    color:#6b7280;
+.filter-box {
+    background: white;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid #edf0f4;
+    margin-bottom: 20px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# CARGAR CSV INTELIGENTE
+# CSV
 # ---------------------------------------------------
 archivo = Path("datos_mantenimiento.csv")
 
-if not archivo.exists():
-    st.error("No se encontró datos_mantenimiento.csv en el repositorio.")
-    st.stop()
-
-try:
-    df = pd.read_csv(
-        archivo,
-        sep=None,
-        engine="python",
-        encoding="utf-8-sig"
-    )
-except Exception as e:
-    st.error(f"Error leyendo CSV: {e}")
-    st.stop()
-
-# limpiar encabezados
-df.columns = (
-    df.columns
-    .str.strip()
-    .str.replace("\ufeff", "", regex=False)
+df = pd.read_csv(
+    archivo,
+    sep=None,
+    engine="python",
+    encoding="utf-8-sig"
 )
 
-# normalizar nombres
-rename_map = {}
+df.columns = df.columns.str.strip()
 
-for col in df.columns:
-    c = col.lower().strip()
-
-    if c == "fecha":
-        rename_map[col] = "Fecha"
-
-    elif c == "equipo":
-        rename_map[col] = "Equipo"
-
-    elif "operativo" in c:
-        rename_map[col] = "Tiempo Operativo (h)"
-
-    elif c == "fallas":
-        rename_map[col] = "Fallas"
-
-    elif "reparación" in c or "reparacion" in c:
-        rename_map[col] = "Tiempo Reparación (h)"
-
-df = df.rename(columns=rename_map)
-
-# validar
-cols = [
-    "Fecha",
-    "Equipo",
-    "Tiempo Operativo (h)",
-    "Fallas",
-    "Tiempo Reparación (h)"
-]
-
-faltantes = [c for c in cols if c not in df.columns]
-
-if faltantes:
-    st.error(f"Faltan columnas: {faltantes}")
-    st.write("Columnas detectadas:", list(df.columns))
-    st.stop()
-
-# ---------------------------------------------------
-# FECHAS
-# ---------------------------------------------------
-df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
-df = df.dropna(subset=["Fecha"])
-
+df["Fecha"] = pd.to_datetime(df["Fecha"])
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
+df["Dia"] = df["Fecha"].dt.day
 
 meses = {
 1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",
@@ -151,22 +94,41 @@ meses = {
 df["Mes"] = df["MesNum"].map(meses)
 
 # ---------------------------------------------------
-# SIDEBAR
+# HEADER
 # ---------------------------------------------------
-st.sidebar.title("🔧 MaintDash")
-st.sidebar.markdown("### Gestión Inteligente")
+st.title("Dashboard de Mantenimiento")
+st.caption("KPIs operativos y confiabilidad")
+
+# ---------------------------------------------------
+# FILTROS SUPERIORES
+# ---------------------------------------------------
+st.markdown("<div class='filter-box'>", unsafe_allow_html=True)
+
+f1,f2,f3 = st.columns([2,2,1])
 
 años = sorted(df["Año"].unique())
-año_sel = st.sidebar.selectbox(
-    "📅 Año",
-    años,
-    index=len(años)-1
-)
 
-mes_sel = st.sidebar.selectbox(
-    "📌 Mes",
-    ["Todos"] + list(df["Mes"].dropna().unique())
-)
+with f1:
+    año_sel = st.selectbox(
+        "📅 Año",
+        años,
+        index=len(años)-1
+    )
+
+with f2:
+    mes_sel = st.selectbox(
+        "📌 Mes",
+        ["Todos"] + list(df["Mes"].dropna().unique())
+    )
+
+with f3:
+    limpiar = st.button("🧹 Borrar filtros")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+if limpiar:
+    año_sel = max(años)
+    mes_sel = "Todos"
 
 # ---------------------------------------------------
 # FILTRO
@@ -188,56 +150,46 @@ mttr = t_rep / fallas if fallas > 0 else 0
 disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr) > 0 else 0
 
 # ---------------------------------------------------
-# HEADER
-# ---------------------------------------------------
-st.title("Dashboard de Mantenimiento")
-st.caption("KPIs operativos y confiabilidad")
-
-# ---------------------------------------------------
-# KPIS
+# CARDS
 # ---------------------------------------------------
 c1,c2,c3,c4 = st.columns(4)
 
 with c1:
     st.markdown(f"""
     <div class="card">
-        <div class="kpi-title">MTBF</div>
-        <div class="kpi-value">{mtbf:.1f}</div>
-        <small>Horas entre fallas</small>
+    <div class="kpi-title">MTBF</div>
+    <div class="kpi-value">{mtbf:.1f}</div>
     </div>
     """, unsafe_allow_html=True)
 
 with c2:
     st.markdown(f"""
     <div class="card">
-        <div class="kpi-title">MTTR</div>
-        <div class="kpi-value">{mttr:.1f}</div>
-        <small>Horas reparación</small>
+    <div class="kpi-title">MTTR</div>
+    <div class="kpi-value">{mttr:.1f}</div>
     </div>
     """, unsafe_allow_html=True)
 
 with c3:
     st.markdown(f"""
     <div class="card">
-        <div class="kpi-title">TOTAL FALLAS</div>
-        <div class="kpi-value">{int(fallas)}</div>
-        <small>Eventos registrados</small>
+    <div class="kpi-title">TOTAL FALLAS</div>
+    <div class="kpi-value">{int(fallas)}</div>
     </div>
     """, unsafe_allow_html=True)
 
 with c4:
     st.markdown(f"""
     <div class="card">
-        <div class="kpi-title">DISPONIBILIDAD</div>
-        <div class="kpi-value">{disp:.1f}%</div>
-        <small>Eficiencia operacional</small>
+    <div class="kpi-title">DISPONIBILIDAD</div>
+    <div class="kpi-value">{disp:.1f}%</div>
     </div>
     """, unsafe_allow_html=True)
 
 st.write("")
 
 # ---------------------------------------------------
-# GRAFICOS SUPERIORES
+# GRAFICOS ARRIBA
 # ---------------------------------------------------
 g1,g2 = st.columns([1,2])
 
@@ -248,12 +200,7 @@ with g1:
         number={"suffix":"%"},
         gauge={
             "axis":{"range":[0,100]},
-            "bar":{"color":"#10b981"},
-            "steps":[
-                {"range":[0,75],"color":"#fee2e2"},
-                {"range":[75,90],"color":"#fef3c7"},
-                {"range":[90,100],"color":"#dcfce7"}
-            ]
+            "bar":{"color":"#10b981"}
         }
     ))
     fig.update_layout(height=420,title="Disponibilidad")
@@ -269,7 +216,6 @@ with g2:
         title="Fallas por Equipo",
         color_discrete_sequence=["#2563eb"]
     )
-
     fig2.update_layout(height=420)
     st.plotly_chart(fig2,use_container_width=True)
 
@@ -281,33 +227,47 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-df_y = df[df["Año"] == año_sel].copy()
-
+# si filtro por mes -> evolucion diaria
 if mes_sel != "Todos":
-    df_y = df_y[df_y["Mes"] == mes_sel]
 
-grupo = df_y.groupby(["MesNum","Mes"]).agg({
-    "Tiempo Operativo (h)":"sum",
-    "Fallas":"sum",
-    "Tiempo Reparación (h)":"sum"
-}).reset_index()
+    grupo = df_f.groupby("Dia").agg({
+        "Tiempo Operativo (h)":"sum",
+        "Fallas":"sum",
+        "Tiempo Reparación (h)":"sum"
+    }).reset_index()
 
-grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
-grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
-grupo["Disponibilidad"] = (
-    grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-) * 100
+    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
+    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
+    grupo["Disponibilidad"] = (
+        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
+    ) * 100
 
-grupo = grupo.sort_values("MesNum")
+    eje = "Dia"
+    titulo = f"{mes_sel} {año_sel}"
 
-titulo = mes_sel if mes_sel != "Todos" else str(año_sel)
+else:
+    grupo = df_f.groupby(["MesNum","Mes"]).agg({
+        "Tiempo Operativo (h)":"sum",
+        "Fallas":"sum",
+        "Tiempo Reparación (h)":"sum"
+    }).reset_index()
+
+    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
+    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
+    grupo["Disponibilidad"] = (
+        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
+    ) * 100
+
+    grupo = grupo.sort_values("MesNum")
+    eje = "Mes"
+    titulo = str(año_sel)
 
 x1,x2,x3 = st.columns(3)
 
 with x1:
     fig3 = px.line(
         grupo,
-        x="Mes",
+        x=eje,
         y="MTBF",
         markers=True,
         title=f"MTBF - {titulo}"
@@ -317,7 +277,7 @@ with x1:
 with x2:
     fig4 = px.line(
         grupo,
-        x="Mes",
+        x=eje,
         y="MTTR",
         markers=True,
         title=f"MTTR - {titulo}",
@@ -328,7 +288,7 @@ with x2:
 with x3:
     fig5 = px.line(
         grupo,
-        x="Mes",
+        x=eje,
         y="Disponibilidad",
         markers=True,
         title=f"Disponibilidad - {titulo}",
