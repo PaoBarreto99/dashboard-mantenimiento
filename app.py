@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
+from streamlit_plotly_events import plotly_events
 
 # ---------------------------------------------------
 # CONFIG
@@ -14,7 +15,13 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------
-# ESTILO PREMIUM
+# SESSION STATE
+# ---------------------------------------------------
+if "equipo_click" not in st.session_state:
+    st.session_state.equipo_click = None
+
+# ---------------------------------------------------
+# CSS
 # ---------------------------------------------------
 st.markdown("""
 <style>
@@ -43,14 +50,12 @@ h1 {
     padding:18px;
     border-radius:18px;
     margin-bottom:20px;
-    box-shadow:0 10px 24px rgba(0,0,0,.12);
 }
 
 .card {
     padding:24px;
     border-radius:18px;
     color:white;
-    box-shadow:0 10px 24px rgba(0,0,0,.10);
 }
 
 .card1 { background: linear-gradient(135deg,#2563eb,#1d4ed8); }
@@ -66,7 +71,6 @@ h1 {
 .kpi-value {
     font-size:38px;
     font-weight:800;
-    margin-top:8px;
 }
 
 .section-title {
@@ -74,20 +78,18 @@ h1 {
     font-weight:800;
     color:#0f172a;
     margin-top:20px;
-    margin-bottom:10px;
 }
 
 .table-box {
     background:white;
-    border-radius:18px;
     padding:10px;
-    box-shadow:0 10px 24px rgba(0,0,0,.08);
+    border-radius:18px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# LEER CSV
+# CSV
 # ---------------------------------------------------
 archivo = Path("datos_mantenimiento.csv")
 
@@ -136,16 +138,12 @@ st.title("Dashboard de Mantenimiento")
 # ---------------------------------------------------
 st.markdown("<div class='filter-box'>", unsafe_allow_html=True)
 
-f1,f2,f3,f4 = st.columns([2,2,2,1])
+f1,f2,f3 = st.columns([2,2,1])
 
 años = sorted(df["Año"].unique())
 
 with f1:
-    año_sel = st.selectbox(
-        "📅 Año",
-        años,
-        index=len(años)-1
-    )
+    año_sel = st.selectbox("📅 Año", años, index=len(años)-1)
 
 with f2:
     mes_sel = st.selectbox(
@@ -154,31 +152,20 @@ with f2:
     )
 
 with f3:
-    equipo_sel = st.selectbox(
-        "🏭 Equipo",
-        ["Todos"] + sorted(df["Equipo"].unique())
-    )
-
-with f4:
     limpiar = st.button("🧹 Limpiar", use_container_width=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 if limpiar:
-    año_sel = max(años)
-    mes_sel = "Todos"
-    equipo_sel = "Todos"
+    st.session_state.equipo_click = None
 
 # ---------------------------------------------------
-# FILTRO DATA
+# FILTRO BASE
 # ---------------------------------------------------
 df_f = df[df["Año"] == año_sel].copy()
 
 if mes_sel != "Todos":
     df_f = df_f[df_f["Mes"] == mes_sel]
-
-if equipo_sel != "Todos":
-    df_f = df_f[df_f["Equipo"] == equipo_sel]
 
 # ---------------------------------------------------
 # KPI
@@ -222,18 +209,9 @@ with g1:
         mode="gauge+number",
         value=disp,
         number={"suffix":"%"},
-        gauge={
-            "axis":{"range":[0,100]},
-            "bar":{"color":"#10b981"}
-        }
+        gauge={"axis":{"range":[0,100]}}
     ))
-
-    fig.update_layout(
-        height=420,
-        title="Disponibilidad",
-        paper_bgcolor="rgba(0,0,0,0)"
-    )
-
+    fig.update_layout(height=420,title="Disponibilidad")
     st.plotly_chart(fig,use_container_width=True)
 
 with g2:
@@ -247,11 +225,22 @@ with g2:
         color="Equipo"
     )
 
-    fig2.update_layout(
-        height=420,
-        paper_bgcolor="rgba(0,0,0,0)"
+    selected = plotly_events(
+        fig2,
+        click_event=True,
+        hover_event=False,
+        key="grafico_equipo"
     )
 
+    if selected:
+        idx = selected[0]["pointIndex"]
+        st.session_state.equipo_click = fe.iloc[idx]["Equipo"]
+
+# ---------------------------------------------------
+# FILTRO CLICK BARRA
+# ---------------------------------------------------
+if st.session_state.equipo_click:
+    df_f = df_f[df_f["Equipo"] == st.session_state.equipo_click]
 
 # ---------------------------------------------------
 # EVOLUCION
@@ -262,40 +251,31 @@ st.markdown(
 )
 
 if mes_sel != "Todos":
-
     grupo = df_f.groupby("Dia").agg({
         "Tiempo Operativo (h)":"sum",
         "Fallas":"sum",
         "Tiempo Reparación (h)":"sum"
     }).reset_index()
 
-    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
-    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
-    grupo["Disponibilidad"] = (
-        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-    )*100
-
     eje = "Dia"
-    titulo = f"{mes_sel} {año_sel}"
+    titulo = mes_sel
 
 else:
-
     grupo = df_f.groupby(["MesNum","Mes"]).agg({
         "Tiempo Operativo (h)":"sum",
         "Fallas":"sum",
         "Tiempo Reparación (h)":"sum"
     }).reset_index()
 
-    grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
-    grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
-    grupo["Disponibilidad"] = (
-        grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-    )*100
-
     grupo = grupo.sort_values("MesNum")
-
     eje = "Mes"
     titulo = str(año_sel)
+
+grupo["MTBF"] = grupo["Tiempo Operativo (h)"] / grupo["Fallas"]
+grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
+grupo["Disponibilidad"] = (
+    grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
+)*100
 
 x1,x2,x3 = st.columns(3)
 
@@ -318,14 +298,14 @@ with x3:
     )
 
 # ---------------------------------------------------
-# DETALLE TABLA EXCEL
+# TABLA
 # ---------------------------------------------------
 st.markdown(
     "<div class='section-title'>Detalle de Registros</div>",
     unsafe_allow_html=True
 )
 
-mostrar = df_f[[
+tabla = df_f[[
     "Fecha",
     "Equipo",
     "Tiempo Operativo (h)",
@@ -333,12 +313,12 @@ mostrar = df_f[[
     "Tiempo Reparación (h)"
 ]].copy()
 
-mostrar["Fecha"] = mostrar["Fecha"].dt.strftime("%d/%m/%Y")
+tabla["Fecha"] = tabla["Fecha"].dt.strftime("%d/%m/%Y")
 
 st.markdown("<div class='table-box'>", unsafe_allow_html=True)
 
 st.dataframe(
-    mostrar,
+    tabla,
     use_container_width=True,
     hide_index=True
 )
