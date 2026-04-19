@@ -23,9 +23,8 @@ html, body, [class*="css"] {
     background: linear-gradient(180deg,#eef2ff,#f8fafc);
 }
 
-/* ocultar sidebar */
 section[data-testid="stSidebar"] {
-    display: none;
+    display:none;
 }
 
 .block-container {
@@ -34,27 +33,24 @@ section[data-testid="stSidebar"] {
     padding-bottom: 2rem;
 }
 
-/* TITULOS */
 h1 {
-    color: #0f172a !important;
-    font-weight: 800 !important;
+    color:#0f172a !important;
+    font-weight:800 !important;
 }
 
-/* FILTROS */
 .filter-box {
     background: linear-gradient(135deg,#1e293b,#334155);
-    padding: 18px;
-    border-radius: 18px;
-    margin-bottom: 20px;
-    box-shadow: 0 10px 24px rgba(0,0,0,.12);
+    padding:18px;
+    border-radius:18px;
+    margin-bottom:20px;
+    box-shadow:0 10px 24px rgba(0,0,0,.12);
 }
 
-/* CARDS KPI */
 .card {
-    padding: 24px;
-    border-radius: 18px;
-    color: white;
-    box-shadow: 0 10px 24px rgba(0,0,0,.10);
+    padding:24px;
+    border-radius:18px;
+    color:white;
+    box-shadow:0 10px 24px rgba(0,0,0,.10);
 }
 
 .card1 { background: linear-gradient(135deg,#2563eb,#1d4ed8); }
@@ -63,28 +59,29 @@ h1 {
 .card4 { background: linear-gradient(135deg,#059669,#047857); }
 
 .kpi-title {
-    font-size: 14px;
-    opacity: .9;
+    font-size:14px;
+    opacity:.9;
 }
 
 .kpi-value {
-    font-size: 38px;
-    font-weight: 800;
-    margin-top: 8px;
+    font-size:38px;
+    font-weight:800;
+    margin-top:8px;
 }
 
-/* secciones */
 .section-title {
-    font-size: 28px;
-    font-weight: 800;
-    color: #0f172a;
-    margin-top: 12px;
-    margin-bottom: 10px;
+    font-size:28px;
+    font-weight:800;
+    color:#0f172a;
+    margin-top:20px;
+    margin-bottom:10px;
 }
 
-/* eliminar espacios visuales extras */
-[data-testid="stVerticalBlock"] > div:empty {
-    display:none;
+.table-box {
+    background:white;
+    border-radius:18px;
+    padding:10px;
+    box-shadow:0 10px 24px rgba(0,0,0,.08);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -107,9 +104,6 @@ df = pd.read_csv(
 
 df.columns = df.columns.str.strip()
 
-# ---------------------------------------------------
-# FECHA ROBUSTA
-# ---------------------------------------------------
 df["Fecha"] = pd.to_datetime(
     df["Fecha"],
     errors="coerce",
@@ -119,7 +113,7 @@ df["Fecha"] = pd.to_datetime(
 df = df.dropna(subset=["Fecha"])
 
 # ---------------------------------------------------
-# FECHAS AUX
+# FECHAS
 # ---------------------------------------------------
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
@@ -138,11 +132,11 @@ df["Mes"] = df["MesNum"].map(meses)
 st.title("Dashboard de Mantenimiento")
 
 # ---------------------------------------------------
-# FILTROS TOP
+# FILTROS
 # ---------------------------------------------------
 st.markdown("<div class='filter-box'>", unsafe_allow_html=True)
 
-f1, f2, f3 = st.columns([2,2,1])
+f1,f2,f3,f4 = st.columns([2,2,2,1])
 
 años = sorted(df["Año"].unique())
 
@@ -160,13 +154,20 @@ with f2:
     )
 
 with f3:
-    limpiar = st.button("🧹 Borrar filtros", use_container_width=True)
+    equipo_sel = st.selectbox(
+        "🏭 Equipo",
+        ["Todos"] + sorted(df["Equipo"].unique())
+    )
+
+with f4:
+    limpiar = st.button("🧹 Limpiar", use_container_width=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 if limpiar:
     año_sel = max(años)
     mes_sel = "Todos"
+    equipo_sel = "Todos"
 
 # ---------------------------------------------------
 # FILTRO DATA
@@ -175,6 +176,9 @@ df_f = df[df["Año"] == año_sel].copy()
 
 if mes_sel != "Todos":
     df_f = df_f[df_f["Mes"] == mes_sel]
+
+if equipo_sel != "Todos":
+    df_f = df_f[df_f["Equipo"] == equipo_sel]
 
 # ---------------------------------------------------
 # KPI
@@ -188,7 +192,7 @@ mttr = t_rep / fallas if fallas > 0 else 0
 disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr) > 0 else 0
 
 # ---------------------------------------------------
-# KPI CARDS
+# CARDS
 # ---------------------------------------------------
 c1,c2,c3,c4 = st.columns(4)
 
@@ -209,7 +213,7 @@ for col, item in zip([c1,c2,c3,c4], cards):
         """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# GRAFICOS SUPERIORES
+# GRAFICOS
 # ---------------------------------------------------
 g1,g2 = st.columns([1,2])
 
@@ -220,12 +224,7 @@ with g1:
         number={"suffix":"%"},
         gauge={
             "axis":{"range":[0,100]},
-            "bar":{"color":"#10b981"},
-            "steps":[
-                {"range":[0,75],"color":"#fecaca"},
-                {"range":[75,90],"color":"#fde68a"},
-                {"range":[90,100],"color":"#bbf7d0"}
-            ]
+            "bar":{"color":"#10b981"}
         }
     ))
 
@@ -235,7 +234,7 @@ with g1:
         paper_bgcolor="rgba(0,0,0,0)"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,use_container_width=True)
 
 with g2:
     fe = df_f.groupby("Equipo")["Fallas"].sum().reset_index()
@@ -245,19 +244,23 @@ with g2:
         x="Equipo",
         y="Fallas",
         title="Fallas por Equipo",
-        color="Equipo",
-        color_discrete_sequence=[
-            "#2563eb","#7c3aed","#f59e0b","#059669","#dc2626"
-        ]
+        color="Equipo"
     )
 
     fig2.update_layout(
         height=420,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,.55)"
+        paper_bgcolor="rgba(0,0,0,0)"
     )
 
-    st.plotly_chart(fig2, use_container_width=True)
+    equipo_click = st.selectbox(
+        "🎯 Filtrar desde gráfico",
+        ["Todos"] + list(fe["Equipo"])
+    )
+
+    if equipo_click != "Todos":
+        df_f = df_f[df_f["Equipo"] == equipo_click]
+
+    st.plotly_chart(fig2,use_container_width=True)
 
 # ---------------------------------------------------
 # EVOLUCION
@@ -306,48 +309,47 @@ else:
 x1,x2,x3 = st.columns(3)
 
 with x1:
-    fig3 = px.line(
-        grupo,
-        x=eje,
-        y="MTBF",
-        markers=True,
-        title=f"MTBF - {titulo}",
-        color_discrete_sequence=["#2563eb"]
+    st.plotly_chart(
+        px.line(grupo,x=eje,y="MTBF",markers=True,title=f"MTBF - {titulo}"),
+        use_container_width=True
     )
-    fig3.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,.55)"
-    )
-    st.plotly_chart(fig3,use_container_width=True)
 
 with x2:
-    fig4 = px.line(
-        grupo,
-        x=eje,
-        y="MTTR",
-        markers=True,
-        title=f"MTTR - {titulo}",
-        color_discrete_sequence=["#f59e0b"]
+    st.plotly_chart(
+        px.line(grupo,x=eje,y="MTTR",markers=True,title=f"MTTR - {titulo}"),
+        use_container_width=True
     )
-    fig4.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,.55)"
-    )
-    st.plotly_chart(fig4,use_container_width=True)
 
 with x3:
-    fig5 = px.line(
-        grupo,
-        x=eje,
-        y="Disponibilidad",
-        markers=True,
-        title=f"Disponibilidad - {titulo}",
-        color_discrete_sequence=["#059669"]
+    st.plotly_chart(
+        px.line(grupo,x=eje,y="Disponibilidad",markers=True,title=f"Disponibilidad - {titulo}"),
+        use_container_width=True
     )
-    fig5.add_hline(y=90,line_dash="dash")
-    fig5.add_hline(y=75,line_dash="dash")
-    fig5.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,.55)"
-    )
-    st.plotly_chart(fig5,use_container_width=True)
+
+# ---------------------------------------------------
+# DETALLE TABLA EXCEL
+# ---------------------------------------------------
+st.markdown(
+    "<div class='section-title'>Detalle de Registros</div>",
+    unsafe_allow_html=True
+)
+
+mostrar = df_f[[
+    "Fecha",
+    "Equipo",
+    "Tiempo Operativo (h)",
+    "Fallas",
+    "Tiempo Reparación (h)"
+]].copy()
+
+mostrar["Fecha"] = mostrar["Fecha"].dt.strftime("%d/%m/%Y")
+
+st.markdown("<div class='table-box'>", unsafe_allow_html=True)
+
+st.dataframe(
+    mostrar,
+    use_container_width=True,
+    hide_index=True
+)
+
+st.markdown("</div>", unsafe_allow_html=True)
