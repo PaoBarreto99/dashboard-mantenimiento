@@ -1,4 +1,3 @@
-```python
 # app.py
 # Dashboard de Mantenimiento - Streamlit
 # Ejecutar:
