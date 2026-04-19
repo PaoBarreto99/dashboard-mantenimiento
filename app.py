@@ -68,9 +68,13 @@ section[data-testid="stSidebar"] {
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------
-# CSV
+# LEER CSV
 # ---------------------------------------------------
 archivo = Path("datos_mantenimiento.csv")
+
+if not archivo.exists():
+    st.error("No se encontró datos_mantenimiento.csv")
+    st.stop()
 
 df = pd.read_csv(
     archivo,
@@ -81,7 +85,20 @@ df = pd.read_csv(
 
 df.columns = df.columns.str.strip()
 
-df["Fecha"] = pd.to_datetime(df["Fecha"])
+# ---------------------------------------------------
+# FECHA ROBUSTA (SOLUCION ERROR)
+# ---------------------------------------------------
+df["Fecha"] = pd.to_datetime(
+    df["Fecha"],
+    errors="coerce",
+    dayfirst=True
+)
+
+df = df.dropna(subset=["Fecha"])
+
+# ---------------------------------------------------
+# FECHAS AUX
+# ---------------------------------------------------
 df["Año"] = df["Fecha"].dt.year
 df["MesNum"] = df["Fecha"].dt.month
 df["Dia"] = df["Fecha"].dt.day
@@ -100,7 +117,7 @@ st.title("Dashboard de Mantenimiento")
 st.caption("KPIs operativos y confiabilidad")
 
 # ---------------------------------------------------
-# FILTROS SUPERIORES
+# FILTROS ARRIBA
 # ---------------------------------------------------
 st.markdown("<div class='filter-box'>", unsafe_allow_html=True)
 
@@ -109,16 +126,12 @@ f1,f2,f3 = st.columns([2,2,1])
 años = sorted(df["Año"].unique())
 
 with f1:
-    año_sel = st.selectbox(
-        "📅 Año",
-        años,
-        index=len(años)-1
-    )
+    año_sel = st.selectbox("📅 Año", años, index=len(años)-1)
 
 with f2:
     mes_sel = st.selectbox(
         "📌 Mes",
-        ["Todos"] + list(df["Mes"].dropna().unique())
+        ["Todos"] + list(df["Mes"].unique())
     )
 
 with f3:
@@ -131,7 +144,7 @@ if limpiar:
     mes_sel = "Todos"
 
 # ---------------------------------------------------
-# FILTRO
+# FILTRO DATA
 # ---------------------------------------------------
 df_f = df[df["Año"] == año_sel].copy()
 
@@ -154,42 +167,26 @@ disp = (mtbf / (mtbf + mttr))*100 if (mtbf + mttr) > 0 else 0
 # ---------------------------------------------------
 c1,c2,c3,c4 = st.columns(4)
 
-with c1:
-    st.markdown(f"""
-    <div class="card">
-    <div class="kpi-title">MTBF</div>
-    <div class="kpi-value">{mtbf:.1f}</div>
-    </div>
-    """, unsafe_allow_html=True)
+cards = [
+("MTBF", f"{mtbf:.1f}"),
+("MTTR", f"{mttr:.1f}"),
+("TOTAL FALLAS", f"{int(fallas)}"),
+("DISPONIBILIDAD", f"{disp:.1f}%")
+]
 
-with c2:
-    st.markdown(f"""
-    <div class="card">
-    <div class="kpi-title">MTTR</div>
-    <div class="kpi-value">{mttr:.1f}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c3:
-    st.markdown(f"""
-    <div class="card">
-    <div class="kpi-title">TOTAL FALLAS</div>
-    <div class="kpi-value">{int(fallas)}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c4:
-    st.markdown(f"""
-    <div class="card">
-    <div class="kpi-title">DISPONIBILIDAD</div>
-    <div class="kpi-value">{disp:.1f}%</div>
-    </div>
-    """, unsafe_allow_html=True)
+for col, item in zip([c1,c2,c3,c4], cards):
+    with col:
+        st.markdown(f"""
+        <div class="card">
+        <div class="kpi-title">{item[0]}</div>
+        <div class="kpi-value">{item[1]}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.write("")
 
 # ---------------------------------------------------
-# GRAFICOS ARRIBA
+# TOP GRAFICOS
 # ---------------------------------------------------
 g1,g2 = st.columns([1,2])
 
@@ -200,7 +197,7 @@ with g1:
         number={"suffix":"%"},
         gauge={
             "axis":{"range":[0,100]},
-            "bar":{"color":"#10b981"}
+            "bar":{"color":"green"}
         }
     ))
     fig.update_layout(height=420,title="Disponibilidad")
@@ -213,9 +210,9 @@ with g2:
         fe,
         x="Equipo",
         y="Fallas",
-        title="Fallas por Equipo",
-        color_discrete_sequence=["#2563eb"]
+        title="Fallas por Equipo"
     )
+
     fig2.update_layout(height=420)
     st.plotly_chart(fig2,use_container_width=True)
 
@@ -227,7 +224,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# si filtro por mes -> evolucion diaria
 if mes_sel != "Todos":
 
     grupo = df_f.groupby("Dia").agg({
@@ -240,12 +236,13 @@ if mes_sel != "Todos":
     grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
     grupo["Disponibilidad"] = (
         grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-    ) * 100
+    )*100
 
     eje = "Dia"
     titulo = f"{mes_sel} {año_sel}"
 
 else:
+
     grupo = df_f.groupby(["MesNum","Mes"]).agg({
         "Tiempo Operativo (h)":"sum",
         "Fallas":"sum",
@@ -256,9 +253,10 @@ else:
     grupo["MTTR"] = grupo["Tiempo Reparación (h)"] / grupo["Fallas"]
     grupo["Disponibilidad"] = (
         grupo["MTBF"] / (grupo["MTBF"] + grupo["MTTR"])
-    ) * 100
+    )*100
 
     grupo = grupo.sort_values("MesNum")
+
     eje = "Mes"
     titulo = str(año_sel)
 
@@ -280,8 +278,7 @@ with x2:
         x=eje,
         y="MTTR",
         markers=True,
-        title=f"MTTR - {titulo}",
-        color_discrete_sequence=["orange"]
+        title=f"MTTR - {titulo}"
     )
     st.plotly_chart(fig4,use_container_width=True)
 
@@ -291,8 +288,7 @@ with x3:
         x=eje,
         y="Disponibilidad",
         markers=True,
-        title=f"Disponibilidad - {titulo}",
-        color_discrete_sequence=["green"]
+        title=f"Disponibilidad - {titulo}"
     )
     fig5.add_hline(y=90,line_dash="dash")
     fig5.add_hline(y=75,line_dash="dash")
